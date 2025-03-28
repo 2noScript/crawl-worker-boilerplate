@@ -1,0 +1,9 @@
+.venv
+*/.venv
+assets/input
+**/.DS_Store
+__pycache__/
+**/__pycache__/
+camoufox
+camoufox.zip
+proxy.txt
