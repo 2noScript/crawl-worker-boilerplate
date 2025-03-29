@@ -36,6 +36,9 @@ class BrowserWorkerLogger:
     def create_task(self, task_id):
         print(f"Created task with id: {task_id}")
 
+    def worker_proxy_not_connected(self, proxy_str):
+        print(f"Worker proxy not connected: {proxy_str}")
+
 
 class BrowserWorker:
     def __init__(self, num_workers=3, max_retries=5, show_browser=False, proxy_manager=None):
@@ -89,21 +92,39 @@ class BrowserWorker:
         if self.proxy_manager:
             proxy = self.proxy_manager.get_random_proxy()
             
-        async with AsyncCamoufox(
-            i_know_what_im_doing=True,
-            geoip=True,
-            os=('windows', 'macos', 'linux'),
-            screen=Screen(max_width=1920, max_height=3200),
-            humanize=True,
-            proxy=proxy,
-            block_images=True,
-            headless=not self.show_browser,
-        ) as browser:
-            context = await browser.new_context()
-            page = await context.new_page()
-            result = await handle(page, *args)
-            await context.close()
-        return result, proxy
+        try:
+            async with AsyncCamoufox(
+                i_know_what_im_doing=True,
+                geoip=True,
+                os=('windows', 'macos', 'linux'),
+                screen=Screen(max_width=1920, max_height=3200),
+                humanize=True,
+                proxy=proxy,
+                block_images=True,
+                headless=not self.show_browser,
+            ) as browser:
+                context = await browser.new_context()
+                page = await context.new_page()
+                result = await handle(page, *args)
+                await context.close()
+            return result, proxy
+        except Exception as e:
+            # If there's a proxy connection error, add it to blacklist
+            if proxy and self.proxy_manager and any(err in str(e).lower() for err in [
+                'failed to connect to proxy', 
+                'proxy connection failed',
+                'connection refused',
+                'timeout',
+                'connection error'
+            ]):
+                proxy_str = proxy.get('server', '')
+                if proxy_str:
+                    self.logger.worker_proxy_not_connected(proxy_str)
+                    self.logger.adding_proxy_to_blacklist(proxy_str)
+                    self.proxy_manager.add_to_blacklist(proxy_str)
+
+            # Re-raise the exception to be handled by the caller
+            raise
     
     async def start(self):
         self.workers = []

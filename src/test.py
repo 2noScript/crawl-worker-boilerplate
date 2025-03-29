@@ -1,54 +1,29 @@
 import asyncio
-from utils.worker import TaskWorker
-from utils.handle import bypass_check, get_gtin13
+from utils.worker import BrowserWorker
+from utils.proxy  import ProxyManager
+from models import Task
+
 
 
 urls = [
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/335240193",
-    "https://www.walmart.com/ip/335240193"
-    "https://www.walmart.com/ip/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/Care-Bears-Cheer-Bear-T-Shirt/335240193",
-    "https://www.walmart.com/ip/335240193",
-    "https://www.walmart.com/ip/335240193"
-    "https://www.walmart.com/ip/335240193"
-    
+    "https://browserleaks.com/ip"
 ]
 
-async def task(page, link):
-    # Your task logic here
+async def task_handle(page, link):
     await page.goto(link, wait_until="domcontentloaded")
-    await bypass_check(page)
-    gtin13 = await get_gtin13(page)
-    return gtin13
+    await page.wait_for_timeout(60000)  # Wait for 1 second to let the page load
+    return []
 
 async def main():
     # Create a worker with 3 parallel processes
-    worker = TaskWorker(num_workers=4)
-
-    # Start the workers
-    await worker.start()
-
+    proxy_manager = ProxyManager()
+    worker = BrowserWorker(num_workers=4, show_browser=True,proxy_manager=proxy_manager)
+    tasks=[]
     for url in urls:
-        await worker.add_task(task, [url])
+        tasks.append(Task(handle=task_handle,args=[url]))
+    await worker.run_tasks(tasks)
+    res =await worker.get_results()
+    print(res) 
 
-    await worker.wait_for_completion()
-
-    # Stop the workers
-    await worker.stop()
-    print(worker.results)  # Print the results of the tasks
-
-# Run the async main function
 if __name__ == "__main__":
     asyncio.run(main())
