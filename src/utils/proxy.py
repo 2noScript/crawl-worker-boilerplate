@@ -65,20 +65,28 @@ class ProxyManager:
             self.free_proxy=free_proxy
         else:
             self.free_proxy=FreeProxy()
-             
+            
         self.blacklist=set()
-        self.proxy_file = proxy_file
         self.proxy_list=[]
-        self.blacklist = set()
     
+    def _get_proxy_identifier(self, proxy):
+        if isinstance(proxy, Proxy):
+            return f"{proxy.ip}:{proxy.port}"
+        elif isinstance(proxy, dict) and 'server' in proxy:
+            # Extract IP:port from server URL (http://ip:port)
+            return proxy['server'].split('://')[-1]
+        elif isinstance(proxy, str):
+            return proxy
+        return None
     async def get_random_proxy(self):
         if not self.proxy_list:
-            this.proxy_list=await self.free_proxy.get_proxies()
+            self.proxy_list=await self.free_proxy.get_proxies()
         if len(self.blacklist) >= len(self.proxy_list):
             print("All proxies are blacklisted. Clearing blacklist.")
             self.blacklist.clear()
         
-        available_proxies = [p for p in self.proxy_list if p not in self.blacklist]
+        available_proxies = [p for p in self.proxy_list 
+            if self._get_proxy_identifier(p) not in self.blacklist]
         if not available_proxies:
             self.reload_proxies()
             return await self.get_random_proxy()
@@ -99,11 +107,7 @@ class ProxyManager:
             self.add_to_blacklist(proxy)
     
     def add_to_blacklist(self, proxy):
-
-        if isinstance(proxy, dict) and 'server' in proxy:
-            self.blacklist.add(proxy['server'])
-        elif isinstance(proxy, str):
-            self.blacklist.add(proxy)
+        self.blacklist.add(proxy)
     
     def get_proxy_count(self):
         return len(self.proxy_list)

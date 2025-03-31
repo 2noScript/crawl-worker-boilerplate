@@ -1,9 +1,10 @@
 import asyncio
-from utils.proxy import FreeProxy
+from utils.proxy import FreeProxy, ProxyManager
+
+proxy_manager = ProxyManager()
 
 async def main():
-    proxy = FreeProxy()
-    proxy_str = await proxy.get_proxies()
-    print(len(proxy_str))
+    proxy_str = await proxy_manager.get_random_proxy()
+    print(proxy_str)
 
 asyncio.run(main())

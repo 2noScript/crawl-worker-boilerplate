@@ -88,7 +88,8 @@ class BrowserWorker:
     async def _run_task(self, handle, args):
         proxy = None
         if self._proxy_manager:
-            proxy = self._proxy_manager.get_random_proxy()
+            proxy = await self._proxy_manager.get_random_proxy()
+            print(f"Using proxy: {proxy}")
             
         try:
             async with AsyncCamoufox(
