@@ -52,9 +52,12 @@ class FreeProxy:
         return results
     
     async def get_proxies(self)->List[Proxy]:
-        proxyscrape=await self.get_proxyscrape()
-        geonode=await self.get_geonode()
-        return proxyscrape+geonode
+        try:
+            proxyscrape=await self.get_proxyscrape()
+            geonode=await self.get_geonode()
+            return proxyscrape+geonode
+        finally:
+            await self._client.close()
     
 
 

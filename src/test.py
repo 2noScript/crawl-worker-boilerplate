@@ -17,7 +17,7 @@ async def task_handle(page, link):
 async def main():
     # Create a worker with 3 parallel processes
     proxy_manager = ProxyManager()
-    worker = BrowserWorker(num_workers=4, show_browser=True)
+    worker = BrowserWorker(num_workers=20, show_browser=True,proxy_manager=proxy_manager)
     tasks=[]
     for url in urls:
         tasks.append(Task(handle=task_handle,args=[url]))

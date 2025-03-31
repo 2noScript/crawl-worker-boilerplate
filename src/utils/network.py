@@ -17,7 +17,8 @@ class AsyncHttpClient:
                 status = response.status
                 return data, status
         finally:
-            await self.close()
+            pass 
+            # await self.close()
 
     async def get(self, url, params=None, headers=None):
         return await self._request("GET", url, params=params, headers=headers)
