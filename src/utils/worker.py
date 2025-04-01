@@ -4,7 +4,7 @@ from browserforge.fingerprints import Screen
 import asyncio
 import re
 from utils.proxy import ProxyManager
-from models import Task
+from models import Task,Proxy
 from typing import List
 
 # Disable insecure request warnings
@@ -22,8 +22,8 @@ class _BrowserWorkerLogger:
     def worker_error(self, worker_id, task_id, error):
         print(f"Worker {worker_id} encountered an error processing task {task_id}: {error}")
         
-    def adding_proxy_to_blacklist(self, proxy_str):
-        print(f"Adding proxy {proxy_str} to blacklist")
+    def adding_proxy_to_blacklist(self, proxy:Proxy):
+        print(f"Adding proxy {proxy.ip}:{proxy.port} to blacklist")
         
     def worker_retry(self, worker_id, task_id, retry_count, max_retries):
         print(f"Worker {worker_id} retrying task {task_id} (attempt {retry_count}/{max_retries})")
@@ -34,8 +34,8 @@ class _BrowserWorkerLogger:
     def create_task(self, task_id):
         print(f"Created task with id: {task_id}")
 
-    def worker_proxy_not_connected(self, proxy_str):
-        print(f"Worker proxy not connected: {proxy_str}")
+    def worker_proxy_not_connected(self, proxy:Proxy):
+        print(f"Worker proxy not connected: {proxy.ip}:{proxy.port}")
 
 
 class BrowserWorker:
@@ -59,15 +59,14 @@ class BrowserWorker:
                 self._logger.worker_processing(worker_id, task.id)
                 result, used_proxy = await self._run_task(task.handle, task.args)
                 await self._results.put(result)  # Put result in queue instead of list
+                self._proxy_manager.add_to_whitelist(used_proxy)  # Add proxy to whitelist if it worked
                 self._logger.worker_completion(worker_id, task.id)
             except Exception as e:
                 self._logger.worker_error(worker_id, task.id, str(e))
-                if self._proxy_manager and 'used_proxy' in locals() and used_proxy:
-                    proxy_str = used_proxy.get('server', '')
-                    if proxy_str:
-                        self._proxy_manager.add_to_blacklist(proxy_str)
-                        self._logger.adding_proxy_to_blacklist(proxy_str)
-                
+                # if self._proxy_manager and 'used_proxy' in locals() and used_proxy:
+                #     self._proxy_manager.add_to_blacklist(used_proxy)
+                #     self._logger.adding_proxy_to_blacklist(used_proxy)
+            
                 retry_count = self._retry_counts.get(task.id, 0)+1
                 
                 if retry_count <= self._max_retries:
@@ -89,7 +88,6 @@ class BrowserWorker:
         proxy = None
         if self._proxy_manager:
             proxy = await self._proxy_manager.get_random_proxy()
-            print(f"Using proxy: {proxy}")
             
         try:
             async with AsyncCamoufox(
@@ -98,29 +96,17 @@ class BrowserWorker:
                 os=('windows', 'macos', 'linux'),
                 screen=Screen(max_width=1920, max_height=3200),
                 humanize=True,
-                proxy=proxy,
+                proxy=proxy.parse(),
                 block_images=True,
                 headless=not self._show_browser,
+                timeout=5000
             ) as browser:
-                context = await browser.new_context()
-                page = await context.new_page()
+                page = await browser.new_page()
                 result = await handle(page, *args)
-                await context.close()
             return result, proxy
         except Exception as e:
-            # If there's a proxy connection error, add it to blacklist
-            if proxy and self._proxy_manager and any(err in str(e).lower() for err in [
-                'failed to connect to proxy', 
-                'proxy connection failed',
-                'connection refused',
-                'timeout',
-                'connection error'
-            ]):
-                proxy_str = proxy.get('server', '')
-                if proxy_str:
-                    self._logger.worker_proxy_not_connected(proxy_str)
-                    self._logger.adding_proxy_to_blacklist(proxy_str)
-                    self._proxy_manager.add_to_blacklist(proxy_str)
+            self._logger.adding_proxy_to_blacklist(proxy)
+            self._proxy_manager.add_to_blacklist(proxy)
 
             # Re-raise the exception to be handled by the caller
             raise

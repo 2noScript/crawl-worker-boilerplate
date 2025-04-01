@@ -2,7 +2,7 @@ from utils.helper import read_file_lines
 from utils.network import AsyncHttpClient
 from models import Proxy
 import random
-from typing import List
+from typing import List, Set  
 import json
 
 
@@ -54,8 +54,8 @@ class FreeProxy:
     async def get_proxies(self)->List[Proxy]:
         try:
             proxyscrape=await self.get_proxyscrape()
-            geonode=await self.get_geonode()
-            return proxyscrape+geonode
+            # geonode=await self.get_geonode()
+            return proxyscrape
         finally:
             await self._client.close()
     
@@ -65,52 +65,51 @@ class FreeProxy:
 class ProxyManager:
     def __init__(self, free_proxy:FreeProxy=None):
         if free_proxy:
-            self.free_proxy=free_proxy
+            self.free_proxy = free_proxy
         else:
-            self.free_proxy=FreeProxy()
+            self.free_proxy = FreeProxy()
             
-        self.blacklist=set()
-        self.proxy_list=[]
+        self.proxy_list: List[Proxy] = []
+        self.whitelist = set()
+        self.blacklist= set()
     
-    def _get_proxy_identifier(self, proxy):
-        if isinstance(proxy, Proxy):
-            return f"{proxy.ip}:{proxy.port}"
-        elif isinstance(proxy, dict) and 'server' in proxy:
-            # Extract IP:port from server URL (http://ip:port)
-            return proxy['server'].split('://')[-1]
-        elif isinstance(proxy, str):
-            return proxy
-        return None
+    def _get_available_proxies(self):
+        if self.whitelist:
+            print("Using whitelist")
+            return list(self.whitelist)
+        available_proxies = []
+        for proxy in self.proxy_list:
+            if not any(proxy.ip == black_proxy.ip and proxy.port == black_proxy.port 
+                      for black_proxy in self.blacklist):
+                available_proxies.append(proxy)
+        return available_proxies
+
+
     async def get_random_proxy(self):
         if not self.proxy_list:
             self.proxy_list=await self.free_proxy.get_proxies()
         if len(self.blacklist) >= len(self.proxy_list):
             print("All proxies are blacklisted. Clearing blacklist.")
             self.blacklist.clear()
+            self.whitelist.clear()
         
-        available_proxies = [p for p in self.proxy_list 
-            if self._get_proxy_identifier(p) not in self.blacklist]
-        if not available_proxies:
-            self.reload_proxies()
-            return await self.get_random_proxy()
+        available_proxies = self._get_available_proxies()
+        print(f"Available proxies: {len(available_proxies)}")
+
         try:    
-            proxy = random.choice(available_proxies)            
-            proxy_config = {
-                "server": f"{next(iter(proxy.protocol))}://{proxy.ip}:{proxy.port}"
-            }
-                
-            if proxy.username and proxy.password:
-                proxy_config.update({
-                    "username": proxy.username,
-                    "password": proxy.password
-                })
-            return proxy_config
+            return random.choice(available_proxies)
+
         except Exception as e:
             print(f"Error creating proxy configuration: {e}")
             self.add_to_blacklist(proxy)
     
     def add_to_blacklist(self, proxy):
         self.blacklist.add(proxy)
+        self.whitelist.discard(proxy)
+
+    def add_to_whitelist(self, proxy):
+        self.whitelist.add(proxy)
+
     
     def get_proxy_count(self):
         return len(self.proxy_list)

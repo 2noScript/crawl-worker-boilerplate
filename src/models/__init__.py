@@ -16,5 +16,23 @@ class Proxy(BaseModel):
     responseTime: float
     countryCode: Optional[str] = None
 
+    def parse(self):
+        proxy_config = {
+            "server": f"{next(iter(self.protocol))}://{self.ip}:{self.port}"
+        }
+            
+        if self.username and self.password:
+            proxy_config.update({
+                "username": self.username,
+                "password": self.password
+            })
+        return proxy_config
 
 
+    def __hash__(self):
+        return hash((self.ip, self.port))
+
+    # def __eq__(self, other):
+    #     if not isinstance(other, Proxy):
+    #         return False
+    #     return self.ip == other.ip and self.port == other.port

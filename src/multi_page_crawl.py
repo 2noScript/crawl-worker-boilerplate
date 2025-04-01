@@ -32,8 +32,8 @@ async def main():
     
     worker = BrowserWorker(
         num_workers=5,
-        max_retries=3,
-        show_browser=False,
+        max_retries=10,
+        show_browser=True,
         proxy_manager=proxy_manager
     )
     
