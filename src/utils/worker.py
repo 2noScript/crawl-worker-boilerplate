@@ -59,14 +59,11 @@ class BrowserWorker:
                 self._logger.worker_processing(worker_id, task.id)
                 result, used_proxy = await self._run_task(task.handle, task.args)
                 await self._results.put(result)  # Put result in queue instead of list
-                self._proxy_manager.add_to_whitelist(used_proxy)  # Add proxy to whitelist if it worked
+                if self._proxy_manager:
+                     self._proxy_manager.add_to_whitelist(used_proxy)  # Add proxy to whitelist if it worked
                 self._logger.worker_completion(worker_id, task.id)
             except Exception as e:
                 self._logger.worker_error(worker_id, task.id, str(e))
-                # if self._proxy_manager and 'used_proxy' in locals() and used_proxy:
-                #     self._proxy_manager.add_to_blacklist(used_proxy)
-                #     self._logger.adding_proxy_to_blacklist(used_proxy)
-            
                 retry_count = self._retry_counts.get(task.id, 0)+1
                 
                 if retry_count <= self._max_retries:
@@ -85,21 +82,26 @@ class BrowserWorker:
         return task.id
     
     async def _run_task(self, handle, args):
-        proxy = None
+        proxy=None
+        config={
+            "i_know_what_im_doing":True,
+            "geoip":True,
+            "os":('windows','macos', 'linux'),
+            "screen":Screen(max_width=1920, max_height=3200),
+            "humanize":True,
+            "block_images":True,
+            "headless":not self._show_browser,
+            "timeout":5000
+        }
+       
         if self._proxy_manager:
             proxy = await self._proxy_manager.get_random_proxy()
+            config["proxy"]=proxy.parse()
+
             
         try:
             async with AsyncCamoufox(
-                i_know_what_im_doing=True,
-                geoip=True,
-                os=('windows', 'macos', 'linux'),
-                screen=Screen(max_width=1920, max_height=3200),
-                humanize=True,
-                proxy=proxy.parse(),
-                block_images=True,
-                headless=not self._show_browser,
-                timeout=5000
+              **config
             ) as browser:
                 page = await browser.new_page()
                 result = await handle(page, *args)
@@ -107,7 +109,7 @@ class BrowserWorker:
         except Exception as e:
             self._logger.adding_proxy_to_blacklist(proxy)
             self._proxy_manager.add_to_blacklist(proxy)
-
+            print(e)
             # Re-raise the exception to be handled by the caller
             raise
     
